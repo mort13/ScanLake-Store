@@ -1,0 +1,20 @@
+# Local dev secrets (DO NOT COMMIT)
+.dev.vars
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Wrangler build artifacts
+.wrangler/
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

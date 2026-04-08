@@ -1,0 +1,19 @@
+name = "scanlake-store"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+ALLOWED_ORIGIN = "*"
+
+[[r2_buckets]]
+binding = "SCANLAKE_BUCKET"
+bucket_name = "scanlake-data"
+
+[durable_objects]
+bindings = [
+  { name = "RATE_LIMITER", class_name = "RateLimiter" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["RateLimiter"]
