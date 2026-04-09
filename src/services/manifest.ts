@@ -22,29 +22,17 @@ const MANIFEST_KEY = 'manifest.json'
 export async function buildManifest(bucket: R2Bucket): Promise<ManifestData> {
   const files: ParquetFile[] = []
 
-  // List all objects in the bucket
-  let listResult = await bucket.list({ prefix: 'scans/' })
-  files.push(...parseFilesFromListResult(listResult.objects, 'scans'))
+  // List all parquet files (structure: yyyy/mm/dd/userId/sessionId/{type}_batch*.parquet)
+  let listResult = await bucket.list({ delimiter: undefined })
+
+  files.push(...parseFilesFromListResult(listResult.objects))
 
   // Continue listing if truncated
   while (listResult.truncated) {
     listResult = await bucket.list({
-      prefix: 'scans/',
       cursor: listResult.cursor,
     })
-    files.push(...parseFilesFromListResult(listResult.objects, 'scans'))
-  }
-
-  // List compositions as well
-  listResult = await bucket.list({ prefix: 'compositions/' })
-  files.push(...parseFilesFromListResult(listResult.objects, 'compositions'))
-
-  while (listResult.truncated) {
-    listResult = await bucket.list({
-      prefix: 'compositions/',
-      cursor: listResult.cursor,
-    })
-    files.push(...parseFilesFromListResult(listResult.objects, 'compositions'))
+    files.push(...parseFilesFromListResult(listResult.objects))
   }
 
   // Sort by uploaded time descending
@@ -60,19 +48,21 @@ export async function buildManifest(bucket: R2Bucket): Promise<ManifestData> {
 
 /**
  * Parses R2 object list into ParquetFile entries
- * Expected key format: {type}/yyyy/mm/dd/{userId}/{sessionId}/{type}_batch{batchNumber}.parquet
+ * Expected key format: yyyy/mm/dd/{userId}/{sessionId}/{type}_batch{batchNumber}.parquet
  */
-function parseFilesFromListResult(objects: R2Object[], type: 'scans' | 'compositions'): ParquetFile[] {
+function parseFilesFromListResult(objects: R2Object[]): ParquetFile[] {
   return objects
     .filter((obj) => obj.key.endsWith('.parquet'))
     .map((obj) => {
       const parts = obj.key.split('/')
-      // Format: type/yyyy/mm/dd/userId/sessionId/filename
-      const userId = parts[4] ?? 'unknown'
-      const sessionId = parts[5] ?? 'unknown'
+      // Format: yyyy/mm/dd/userId/sessionId/filename
+      const userId = parts[3] ?? 'unknown'
+      const sessionId = parts[4] ?? 'unknown'
 
-      // Extract batch number from filename: scans_batch001.parquet -> 001
-      const filename = parts[6] ?? ''
+      // Extract type and batch number from filename
+      const filename = parts[5] ?? ''
+      const typeMatch = filename.match(/^(scans|compositions)_batch/)
+      const type = (typeMatch?.[1] ?? 'scans') as 'scans' | 'compositions'
       const batchMatch = filename.match(/_batch(\d+)\.parquet$/)
       const batchNumber = batchMatch ? parseInt(batchMatch[1], 10) : 0
 
