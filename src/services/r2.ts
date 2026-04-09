@@ -9,7 +9,7 @@ export function buildR2Key(
   const mm = String(now.getUTCMonth() + 1).padStart(2, '0')
   const dd = String(now.getUTCDate()).padStart(2, '0')
   const batch = String(batchNumber).padStart(3, '0')
-  return `scanlake-data/${yyyy}/${mm}/${dd}/${userId}/${sessionId}/${type}_batch${batch}.parquet`
+  return `${yyyy}/${mm}/${dd}/${userId}/${sessionId}/${type}_batch${batch}.parquet`
 }
 
 export async function writeParquetToR2(
