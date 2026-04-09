@@ -2,6 +2,7 @@ import type { Context } from 'hono'
 import type { Env, JwtPayload } from '../types'
 import { checkRateLimit } from '../services/rate-limit'
 import { buildR2Key, writeParquetToR2 } from '../services/r2'
+import { updateManifest } from '../services/manifest'
 
 type UploadEnv = { Bindings: Env; Variables: { jwtPayload: JwtPayload } }
 
@@ -42,6 +43,12 @@ export async function uploadRoute(c: Context<UploadEnv>) {
     await Promise.all([
       writeParquetToR2(c.env.SCANLAKE_BUCKET, scansKey, scansData),
       writeParquetToR2(c.env.SCANLAKE_BUCKET, compositionsKey, compositionsData),
+    ])
+
+    // Update the manifest after successful uploads
+    await updateManifest(c.env.SCANLAKE_BUCKET, [
+      { key: scansKey, type: 'scans' },
+      { key: compositionsKey, type: 'compositions' },
     ])
   } catch (err) {
     console.error('R2 write failed:', err)
