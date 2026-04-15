@@ -1,5 +1,5 @@
 export function buildR2Key(
-  type: 'scans' | 'compositions',
+  type: 'scans' | 'compositions' | 'confidences',
   userId: string,
   sessionId: string,
   batchNumber: number,

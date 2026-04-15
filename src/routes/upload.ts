@@ -21,12 +21,14 @@ export async function uploadRoute(c: Context<UploadEnv>) {
   const batchNumberRaw = formData.get('batchNumber') as string | null
   const scansFile = formData.get('scans') as File | null
   const compositionsFile = formData.get('compositions') as File | null
+  const confidencesFile = formData.get('confidences') as File | null
 
   if (!sessionId) return c.json({ error: 'Missing sessionId' }, 400)
   const batchNumber = parseInt(batchNumberRaw ?? '', 10)
   if (isNaN(batchNumber) || batchNumber < 1) return c.json({ error: 'Invalid batchNumber' }, 400)
   if (!scansFile) return c.json({ error: 'Missing scans file' }, 400)
   if (!compositionsFile) return c.json({ error: 'Missing compositions file' }, 400)
+  if (!confidencesFile) return c.json({ error: 'Missing confidences file' }, 400)
 
   const formUserId = formData.get('userId') as string | null
   if (formUserId && formUserId !== userId) {
@@ -35,25 +37,29 @@ export async function uploadRoute(c: Context<UploadEnv>) {
 
   const scansData = await scansFile.arrayBuffer()
   const compositionsData = await compositionsFile.arrayBuffer()
+  const confidencesData = await confidencesFile.arrayBuffer()
 
   const scansKey = buildR2Key('scans', userId, sessionId, batchNumber)
   const compositionsKey = buildR2Key('compositions', userId, sessionId, batchNumber)
+  const confidencesKey = buildR2Key('confidences', userId, sessionId, batchNumber)
 
   try {
     await Promise.all([
       writeParquetToR2(c.env.SCANLAKE_BUCKET, scansKey, scansData),
       writeParquetToR2(c.env.SCANLAKE_BUCKET, compositionsKey, compositionsData),
+      writeParquetToR2(c.env.SCANLAKE_BUCKET, confidencesKey, confidencesData),
     ])
 
     // Update the manifest after successful uploads
     await updateManifest(c.env.SCANLAKE_BUCKET, [
       { key: scansKey, type: 'scans' },
       { key: compositionsKey, type: 'compositions' },
+      { key: confidencesKey, type: 'confidences' },
     ])
   } catch (err) {
     console.error('R2 write failed:', err)
     return c.json({ error: 'Storage write failed' }, 500)
   }
 
-  return c.json({ ok: true, keys: [scansKey, compositionsKey] })
+  return c.json({ ok: true, keys: [scansKey, compositionsKey, confidencesKey] })
 }
