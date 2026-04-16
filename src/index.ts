@@ -9,6 +9,7 @@ import { uploadRoute } from './routes/upload'
 import { manifestRoute } from './routes/manifest'
 import { externalUploadRoute } from './routes/external/upload'
 import { externalManifestRoute } from './routes/external/manifest'
+import { buildManifest, saveManifest } from './services/manifest'
 
 export { RateLimiter } from './durable-objects/RateLimiter'
 
@@ -18,6 +19,22 @@ type AppEnv = {
 }
 
 const app = new Hono<AppEnv>()
+
+// Rebuild the manifest from R2 on the first request after every cold start
+// (cold starts happen on each redeploy, so this ensures the manifest is
+// always fresh after a deployment without blocking the incoming request).
+let manifestInitialized = false
+app.use('*', async (c, next) => {
+  if (!manifestInitialized) {
+    manifestInitialized = true
+    c.executionCtx.waitUntil(
+      buildManifest(c.env.SCANLAKE_BUCKET).then((manifest) =>
+        saveManifest(c.env.SCANLAKE_BUCKET, manifest),
+      ),
+    )
+  }
+  return next()
+})
 
 // ── External (third-party) routes ─────────────────────────────────────────────
 // These must be registered before the wildcard internal CORS middleware so that
