@@ -15,12 +15,10 @@ bindings = [
 ]
 
 # KV namespace for API key metadata.
-# Create with: wrangler kv namespace create API_KEYS
-# Then replace the placeholder IDs below with the real ones.
 [[kv_namespaces]]
 binding = "API_KEYS"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
-preview_id = "REPLACE_WITH_KV_PREVIEW_NAMESPACE_ID"
+id = "ac8fe738c3014c49b0a986af12af23f9"
+preview_id = "b7c163bedd4644e8bd010e4d57252ca1"
 
 [[migrations]]
 tag = "v1"
