@@ -14,6 +14,14 @@ bindings = [
   { name = "RATE_LIMITER", class_name = "RateLimiter" }
 ]
 
+# KV namespace for API key metadata.
+# Create with: wrangler kv namespace create API_KEYS
+# Then replace the placeholder IDs below with the real ones.
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_KV_PREVIEW_NAMESPACE_ID"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RateLimiter"]
