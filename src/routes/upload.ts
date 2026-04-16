@@ -28,7 +28,6 @@ export async function uploadRoute(c: Context<UploadEnv>) {
   if (isNaN(batchNumber) || batchNumber < 1) return c.json({ error: 'Invalid batchNumber' }, 400)
   if (!scansFile) return c.json({ error: 'Missing scans file' }, 400)
   if (!compositionsFile) return c.json({ error: 'Missing compositions file' }, 400)
-  if (!confidencesFile) return c.json({ error: 'Missing confidences file' }, 400)
 
   const formUserId = formData.get('userId') as string | null
   if (formUserId && formUserId !== userId) {
@@ -37,29 +36,35 @@ export async function uploadRoute(c: Context<UploadEnv>) {
 
   const scansData = await scansFile.arrayBuffer()
   const compositionsData = await compositionsFile.arrayBuffer()
-  const confidencesData = await confidencesFile.arrayBuffer()
 
   const scansKey = buildR2Key('scans', userId, sessionId, batchNumber)
   const compositionsKey = buildR2Key('compositions', userId, sessionId, batchNumber)
-  const confidencesKey = buildR2Key('confidences', userId, sessionId, batchNumber)
+
+  const writes: Promise<void>[] = [
+    writeParquetToR2(c.env.SCANLAKE_BUCKET, scansKey, scansData),
+    writeParquetToR2(c.env.SCANLAKE_BUCKET, compositionsKey, compositionsData),
+  ]
+  const manifestEntries: Array<{ key: string; type: 'scans' | 'compositions' | 'confidences' }> = [
+    { key: scansKey, type: 'scans' },
+    { key: compositionsKey, type: 'compositions' },
+  ]
+  const responseKeys: string[] = [scansKey, compositionsKey]
+
+  if (confidencesFile) {
+    const confidencesData = await confidencesFile.arrayBuffer()
+    const confidencesKey = buildR2Key('confidences', userId, sessionId, batchNumber)
+    writes.push(writeParquetToR2(c.env.SCANLAKE_BUCKET, confidencesKey, confidencesData))
+    manifestEntries.push({ key: confidencesKey, type: 'confidences' })
+    responseKeys.push(confidencesKey)
+  }
 
   try {
-    await Promise.all([
-      writeParquetToR2(c.env.SCANLAKE_BUCKET, scansKey, scansData),
-      writeParquetToR2(c.env.SCANLAKE_BUCKET, compositionsKey, compositionsData),
-      writeParquetToR2(c.env.SCANLAKE_BUCKET, confidencesKey, confidencesData),
-    ])
-
-    // Update the manifest after successful uploads
-    await updateManifest(c.env.SCANLAKE_BUCKET, [
-      { key: scansKey, type: 'scans' },
-      { key: compositionsKey, type: 'compositions' },
-      { key: confidencesKey, type: 'confidences' },
-    ])
+    await Promise.all(writes)
+    await updateManifest(c.env.SCANLAKE_BUCKET, manifestEntries)
   } catch (err) {
     console.error('R2 write failed:', err)
     return c.json({ error: 'Storage write failed' }, 500)
   }
 
-  return c.json({ ok: true, keys: [scansKey, compositionsKey, confidencesKey] })
+  return c.json({ ok: true, keys: responseKeys })
 }
