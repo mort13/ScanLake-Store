@@ -4,6 +4,8 @@ compatibility_date = "2025-01-01"
 
 [vars]
 ALLOWED_ORIGIN = "*"
+# Parquet format every upload is checked against (columns and types per file kind).
+FORMAT_URL = "https://raw.githubusercontent.com/mort13/ScanLake-Format/main/format.json"
 
 [[r2_buckets]]
 binding = "SCANLAKE_BUCKET"

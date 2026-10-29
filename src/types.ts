@@ -4,6 +4,8 @@ export interface Env {
   JWT_SECRET: string
   ALLOWED_ORIGIN: string
   API_KEYS: KVNamespace
+  /** URL of format.json in the ScanLake-Format repository; uploads are checked against it. */
+  FORMAT_URL: string
 }
 
 export interface JwtPayload {

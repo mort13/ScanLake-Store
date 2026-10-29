@@ -3,6 +3,7 @@ import type { Env, ApiKeyMeta } from '../../types'
 import { checkRateLimit } from '../../services/rate-limit'
 import { buildR2Key, writeParquetToR2 } from '../../services/r2'
 import { updateManifest } from '../../services/manifest'
+import { checkUploadFormat, type FileKind } from '../../services/format'
 
 /** Default IP-level request cap for external routes (per hour). */
 const IP_RATE_LIMIT = 200
@@ -40,6 +41,7 @@ function hasParquetMagic(buf: ArrayBuffer): boolean {
  *   - Required fields: sessionId (UUID v4), batchNumber (int ≥ 1), scans, compositions
  *   - Files must have the .parquet extension and valid PAR1 magic bytes
  *   - Each file must be ≤ apiKeyMeta.maxUploadBytes
+ *   - Columns must match the parquet format published at FORMAT_URL
  */
 export async function externalUploadRoute(c: Context<ExternalUploadEnv>) {
   const meta = c.get('apiKeyMeta')
@@ -136,6 +138,22 @@ export async function externalUploadRoute(c: Context<ExternalUploadEnv>) {
     return c.json({ error: 'compositions: not a valid Parquet file (missing PAR1 magic bytes)' }, 422)
   }
 
+  const confidencesData = confidencesFile instanceof File ? await confidencesFile.arrayBuffer() : null
+  if (confidencesData && !hasParquetMagic(confidencesData)) {
+    return c.json(
+      { error: 'confidences: not a valid Parquet file (missing PAR1 magic bytes)' },
+      422,
+    )
+  }
+
+  // --- Column schema check against the published parquet format ---
+  const formatError = await checkUploadFormat(c.env.FORMAT_URL, [
+    ['scans', scansData],
+    ['compositions', compositionsData],
+    ...(confidencesData ? [['confidences', confidencesData] as [FileKind, ArrayBuffer]] : []),
+  ])
+  if (formatError) return c.json(formatError, 422)
+
   // The ownerId from the key determines the R2 path — callers cannot
   // choose an arbitrary userId.
   const userId = meta.ownerId
@@ -152,14 +170,7 @@ export async function externalUploadRoute(c: Context<ExternalUploadEnv>) {
   ]
   const responseKeys = [scansKey, compositionsKey]
 
-  if (confidencesFile instanceof File) {
-    const confidencesData = await confidencesFile.arrayBuffer()
-    if (!hasParquetMagic(confidencesData)) {
-      return c.json(
-        { error: 'confidences: not a valid Parquet file (missing PAR1 magic bytes)' },
-        422,
-      )
-    }
+  if (confidencesData) {
     const confidencesKey = buildR2Key('confidences', userId, sessionId, batchNumber)
     writes.push(writeParquetToR2(c.env.SCANLAKE_BUCKET, confidencesKey, confidencesData))
     manifestEntries.push({ key: confidencesKey, type: 'confidences' })

@@ -3,6 +3,7 @@ import type { Env, JwtPayload } from '../types'
 import { checkRateLimit } from '../services/rate-limit'
 import { buildR2Key, writeParquetToR2 } from '../services/r2'
 import { updateManifest } from '../services/manifest'
+import { checkUploadFormat, type FileKind } from '../services/format'
 
 type UploadEnv = { Bindings: Env; Variables: { jwtPayload: JwtPayload } }
 
@@ -36,6 +37,14 @@ export async function uploadRoute(c: Context<UploadEnv>) {
 
   const scansData = await scansFile.arrayBuffer()
   const compositionsData = await compositionsFile.arrayBuffer()
+  const confidencesData = confidencesFile ? await confidencesFile.arrayBuffer() : null
+
+  const formatError = await checkUploadFormat(c.env.FORMAT_URL, [
+    ['scans', scansData],
+    ['compositions', compositionsData],
+    ...(confidencesData ? [['confidences', confidencesData] as [FileKind, ArrayBuffer]] : []),
+  ])
+  if (formatError) return c.json(formatError, 422)
 
   const scansKey = buildR2Key('scans', userId, sessionId, batchNumber)
   const compositionsKey = buildR2Key('compositions', userId, sessionId, batchNumber)
@@ -50,8 +59,7 @@ export async function uploadRoute(c: Context<UploadEnv>) {
   ]
   const responseKeys: string[] = [scansKey, compositionsKey]
 
-  if (confidencesFile) {
-    const confidencesData = await confidencesFile.arrayBuffer()
+  if (confidencesData) {
     const confidencesKey = buildR2Key('confidences', userId, sessionId, batchNumber)
     writes.push(writeParquetToR2(c.env.SCANLAKE_BUCKET, confidencesKey, confidencesData))
     manifestEntries.push({ key: confidencesKey, type: 'confidences' })
