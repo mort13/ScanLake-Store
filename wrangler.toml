@@ -11,6 +11,13 @@ FORMAT_URL = "https://raw.githubusercontent.com/mort13/ScanLake-Format/main/form
 binding = "SCANLAKE_BUCKET"
 bucket_name = "scanlake-data"
 
+# ScanLake FrontDesk (the landing page at scanlake.rocks) animates every stored batch.
+# Optional: uploads work the same without it.
+[[services]]
+binding = "FRONTDESK"
+service = "scanlake-frontdesk"
+entrypoint = "Ingest"
+
 [durable_objects]
 bindings = [
   { name = "RATE_LIMITER", class_name = "RateLimiter" }

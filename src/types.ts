@@ -6,6 +6,20 @@ export interface Env {
   API_KEYS: KVNamespace
   /** URL of format.json in the ScanLake-Format repository; uploads are checked against it. */
   FORMAT_URL: string
+  /** Service binding to ScanLake FrontDesk's `Ingest` entrypoint. Optional. */
+  FRONTDESK?: FrontDeskIngest
+}
+
+/** What ScanLake FrontDesk is told about each stored batch. */
+export interface UploadReport {
+  sessionId: string
+  batchNumber: number
+  /** The client's last batch of this session (form field isFinal = "true"). */
+  isFinal: boolean
+}
+
+export interface FrontDeskIngest {
+  upload(report: UploadReport): Promise<void>
 }
 
 export interface JwtPayload {

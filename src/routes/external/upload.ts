@@ -4,6 +4,7 @@ import { checkRateLimit } from '../../services/rate-limit'
 import { buildR2Key, writeParquetToR2 } from '../../services/r2'
 import { updateManifest } from '../../services/manifest'
 import { checkUploadFormat, type FileKind } from '../../services/format'
+import { notifyUpload } from '../../services/frontdesk'
 
 /** Default IP-level request cap for external routes (per hour). */
 const IP_RATE_LIMIT = 200
@@ -85,6 +86,8 @@ export async function externalUploadRoute(c: Context<ExternalUploadEnv>) {
   const scansFile = formData.get('scans') as File | null
   const compositionsFile = formData.get('compositions') as File | null
   const confidencesFile = formData.get('confidences') as File | null
+  // Optional: callers that don't send it never close a session on the landing page.
+  const isFinal = formData.get('isFinal') === 'true'
 
   // --- Structural validation ---
   if (!sessionId || !UUID_RE.test(sessionId)) {
@@ -185,5 +188,6 @@ export async function externalUploadRoute(c: Context<ExternalUploadEnv>) {
     return c.json({ error: 'Storage write failed' }, 500)
   }
 
+  c.executionCtx.waitUntil(notifyUpload(c.env, { sessionId, batchNumber, isFinal }))
   return c.json({ ok: true, keys: responseKeys })
 }

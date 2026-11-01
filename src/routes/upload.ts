@@ -4,6 +4,7 @@ import { checkRateLimit } from '../services/rate-limit'
 import { buildR2Key, writeParquetToR2 } from '../services/r2'
 import { updateManifest } from '../services/manifest'
 import { checkUploadFormat, type FileKind } from '../services/format'
+import { notifyUpload } from '../services/frontdesk'
 
 type UploadEnv = { Bindings: Env; Variables: { jwtPayload: JwtPayload } }
 
@@ -23,6 +24,7 @@ export async function uploadRoute(c: Context<UploadEnv>) {
   const scansFile = formData.get('scans') as File | null
   const compositionsFile = formData.get('compositions') as File | null
   const confidencesFile = formData.get('confidences') as File | null
+  const isFinal = formData.get('isFinal') === 'true'
 
   if (!sessionId) return c.json({ error: 'Missing sessionId' }, 400)
   const batchNumber = parseInt(batchNumberRaw ?? '', 10)
@@ -74,5 +76,6 @@ export async function uploadRoute(c: Context<UploadEnv>) {
     return c.json({ error: 'Storage write failed' }, 500)
   }
 
+  c.executionCtx.waitUntil(notifyUpload(c.env, { sessionId, batchNumber, isFinal }))
   return c.json({ ok: true, keys: responseKeys })
 }
