@@ -15,7 +15,7 @@ type FormatEnv = {
  * Checks performed before the body is fully parsed:
  *   1. Content-Type must be multipart/form-data.
  *   2. If Content-Length is present it is compared against both the
- *      per-key budget (apiKeyMeta.maxUploadBytes × 3 for up to three
+ *      per-key budget (apiKeyMeta.maxUploadBytes × 4 for up to four
  *      files) and the global hard cap.
  *
  * Deeper validation (required fields, file extensions, magic bytes,
@@ -33,8 +33,8 @@ export const formatEnforcerMiddleware: MiddlewareHandler<FormatEnv> = async (c, 
     const contentLength = parseInt(rawLength, 10)
     if (!isNaN(contentLength)) {
       const meta = c.get('apiKeyMeta')
-      // Allow up to 3 files (scans, compositions, confidences) plus form-field overhead.
-      const perKeyBudget = meta ? meta.maxUploadBytes * 3 + 4096 : GLOBAL_MAX_REQUEST_BYTES
+      // Allow up to 4 files (scans, compositions, confidences, positions) plus form-field overhead.
+      const perKeyBudget = meta ? meta.maxUploadBytes * 4 + 4096 : GLOBAL_MAX_REQUEST_BYTES
       const limit = Math.min(perKeyBudget, GLOBAL_MAX_REQUEST_BYTES)
       if (contentLength > limit) {
         return c.json(

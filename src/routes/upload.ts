@@ -25,6 +25,8 @@ export async function uploadRoute(c: Context<UploadEnv>) {
   const compositionsFile = formData.get('compositions') as File | null
   const confidencesFile = formData.get('confidences') as File | null
   const isFinal = formData.get('isFinal') === 'true'
+  // Optional: sent only by users who opted in to sharing their ship position.
+  const positionsFile = formData.get('positions') as File | null
 
   if (!sessionId) return c.json({ error: 'Missing sessionId' }, 400)
   const batchNumber = parseInt(batchNumberRaw ?? '', 10)
@@ -40,11 +42,13 @@ export async function uploadRoute(c: Context<UploadEnv>) {
   const scansData = await scansFile.arrayBuffer()
   const compositionsData = await compositionsFile.arrayBuffer()
   const confidencesData = confidencesFile ? await confidencesFile.arrayBuffer() : null
+  const positionsData = positionsFile ? await positionsFile.arrayBuffer() : null
 
   const formatError = await checkUploadFormat(c.env.FORMAT_URL, [
     ['scans', scansData],
     ['compositions', compositionsData],
     ...(confidencesData ? [['confidences', confidencesData] as [FileKind, ArrayBuffer]] : []),
+    ...(positionsData ? [['positions', positionsData] as [FileKind, ArrayBuffer]] : []),
   ])
   if (formatError) return c.json(formatError, 422)
 
@@ -55,7 +59,7 @@ export async function uploadRoute(c: Context<UploadEnv>) {
     writeParquetToR2(c.env.SCANLAKE_BUCKET, scansKey, scansData),
     writeParquetToR2(c.env.SCANLAKE_BUCKET, compositionsKey, compositionsData),
   ]
-  const manifestEntries: Array<{ key: string; type: 'scans' | 'compositions' | 'confidences' }> = [
+  const manifestEntries: Array<{ key: string; type: FileKind }> = [
     { key: scansKey, type: 'scans' },
     { key: compositionsKey, type: 'compositions' },
   ]
@@ -66,6 +70,13 @@ export async function uploadRoute(c: Context<UploadEnv>) {
     writes.push(writeParquetToR2(c.env.SCANLAKE_BUCKET, confidencesKey, confidencesData))
     manifestEntries.push({ key: confidencesKey, type: 'confidences' })
     responseKeys.push(confidencesKey)
+  }
+
+  if (positionsData) {
+    const positionsKey = buildR2Key('positions', userId, sessionId, batchNumber)
+    writes.push(writeParquetToR2(c.env.SCANLAKE_BUCKET, positionsKey, positionsData))
+    manifestEntries.push({ key: positionsKey, type: 'positions' })
+    responseKeys.push(positionsKey)
   }
 
   try {

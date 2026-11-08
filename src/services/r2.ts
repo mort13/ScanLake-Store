@@ -1,5 +1,7 @@
+import type { FileKind } from './format'
+
 export function buildR2Key(
-  type: 'scans' | 'compositions' | 'confidences',
+  type: FileKind,
   userId: string,
   sessionId: string,
   batchNumber: number,

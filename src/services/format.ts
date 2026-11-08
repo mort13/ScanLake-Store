@@ -1,7 +1,7 @@
 import { parquetMetadata, parquetSchema } from 'hyparquet'
 import type { SchemaElement } from 'hyparquet'
 
-export type FileKind = 'scans' | 'compositions' | 'confidences'
+export type FileKind = 'scans' | 'compositions' | 'confidences' | 'positions'
 
 export interface ColumnSpec {
   name: string
@@ -39,7 +39,7 @@ const COLUMN_TYPES = new Set([
   'JSON', 'BSON', 'UUID', 'ENUM', 'FIXED_LEN_BYTE_ARRAY', 'NESTED',
 ])
 
-const FILE_KINDS: FileKind[] = ['scans', 'compositions', 'confidences']
+const FILE_KINDS: FileKind[] = ['scans', 'compositions', 'confidences', 'positions']
 
 /** How long a fetched format is reused before it is fetched again. */
 const FORMAT_TTL_MS = 5 * 60_000

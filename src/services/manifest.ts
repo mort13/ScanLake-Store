@@ -1,6 +1,8 @@
+import type { FileKind } from './format'
+
 export interface ParquetFile {
   key: string
-  type: 'scans' | 'compositions' | 'confidences'
+  type: FileKind
   userId: string
   sessionId: string
   batchNumber: number
@@ -61,8 +63,8 @@ function parseFilesFromListResult(objects: R2Object[]): ParquetFile[] {
 
       // Extract type and batch number from filename
       const filename = parts[5] ?? ''
-      const typeMatch = filename.match(/^(scans|compositions|confidences)_batch/)
-      const type = (typeMatch?.[1] ?? 'scans') as 'scans' | 'compositions' | 'confidences'
+      const typeMatch = filename.match(/^(scans|compositions|confidences|positions)_batch/)
+      const type = (typeMatch?.[1] ?? 'scans') as FileKind
       const batchMatch = filename.match(/_batch(\d+)\.parquet$/)
       const batchNumber = batchMatch ? parseInt(batchMatch[1], 10) : 0
 
@@ -106,7 +108,7 @@ export async function getManifest(bucket: R2Bucket): Promise<ManifestData | null
  */
 export async function updateManifest(
   bucket: R2Bucket,
-  newFiles: Array<{ key: string; type: 'scans' | 'compositions' | 'confidences' }>,
+  newFiles: Array<{ key: string; type: FileKind }>,
 
 ): Promise<ManifestData> {
   const manifest = await buildManifest(bucket)

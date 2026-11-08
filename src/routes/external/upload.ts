@@ -40,6 +40,7 @@ function hasParquetMagic(buf: ArrayBuffer): boolean {
  *
  * Format enforcement:
  *   - Required fields: sessionId (UUID v4), batchNumber (int ≥ 1), scans, compositions
+ *   - Optional files: confidences, positions
  *   - Files must have the .parquet extension and valid PAR1 magic bytes
  *   - Each file must be ≤ apiKeyMeta.maxUploadBytes
  *   - Columns must match the parquet format published at FORMAT_URL
@@ -88,6 +89,8 @@ export async function externalUploadRoute(c: Context<ExternalUploadEnv>) {
   const confidencesFile = formData.get('confidences') as File | null
   // Optional: callers that don't send it never close a session on the landing page.
   const isFinal = formData.get('isFinal') === 'true'
+  // Optional: sent only by users who opted in to sharing their ship position.
+  const positionsFile = formData.get('positions') as File | null
 
   // --- Structural validation ---
   if (!sessionId || !UUID_RE.test(sessionId)) {
@@ -111,6 +114,7 @@ export async function externalUploadRoute(c: Context<ExternalUploadEnv>) {
     ['scans', scansFile],
     ['compositions', compositionsFile],
     ...(confidencesFile instanceof File ? [['confidences', confidencesFile] as [string, File]] : []),
+    ...(positionsFile instanceof File ? [['positions', positionsFile] as [string, File]] : []),
   ]
 
   for (const [name, file] of requiredFiles) {
@@ -149,11 +153,20 @@ export async function externalUploadRoute(c: Context<ExternalUploadEnv>) {
     )
   }
 
+  const positionsData = positionsFile instanceof File ? await positionsFile.arrayBuffer() : null
+  if (positionsData && !hasParquetMagic(positionsData)) {
+    return c.json(
+      { error: 'positions: not a valid Parquet file (missing PAR1 magic bytes)' },
+      422,
+    )
+  }
+
   // --- Column schema check against the published parquet format ---
   const formatError = await checkUploadFormat(c.env.FORMAT_URL, [
     ['scans', scansData],
     ['compositions', compositionsData],
     ...(confidencesData ? [['confidences', confidencesData] as [FileKind, ArrayBuffer]] : []),
+    ...(positionsData ? [['positions', positionsData] as [FileKind, ArrayBuffer]] : []),
   ])
   if (formatError) return c.json(formatError, 422)
 
@@ -167,7 +180,7 @@ export async function externalUploadRoute(c: Context<ExternalUploadEnv>) {
     writeParquetToR2(c.env.SCANLAKE_BUCKET, scansKey, scansData),
     writeParquetToR2(c.env.SCANLAKE_BUCKET, compositionsKey, compositionsData),
   ]
-  const manifestEntries: Array<{ key: string; type: 'scans' | 'compositions' | 'confidences' }> = [
+  const manifestEntries: Array<{ key: string; type: FileKind }> = [
     { key: scansKey, type: 'scans' },
     { key: compositionsKey, type: 'compositions' },
   ]
@@ -178,6 +191,13 @@ export async function externalUploadRoute(c: Context<ExternalUploadEnv>) {
     writes.push(writeParquetToR2(c.env.SCANLAKE_BUCKET, confidencesKey, confidencesData))
     manifestEntries.push({ key: confidencesKey, type: 'confidences' })
     responseKeys.push(confidencesKey)
+  }
+
+  if (positionsData) {
+    const positionsKey = buildR2Key('positions', userId, sessionId, batchNumber)
+    writes.push(writeParquetToR2(c.env.SCANLAKE_BUCKET, positionsKey, positionsData))
+    manifestEntries.push({ key: positionsKey, type: 'positions' })
+    responseKeys.push(positionsKey)
   }
 
   try {
