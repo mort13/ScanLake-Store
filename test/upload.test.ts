@@ -93,14 +93,35 @@ describe.each(['/api/upload', '/api/external/upload'])('POST %s', (path) => {
     bucket = new FakeBucket()
   })
 
-  function post(form: FormData, formatUrl = FORMAT_V3_URL) {
+  function post(form: FormData, formatUrl = FORMAT_V3_URL, extra: Partial<Env> = {}) {
     const env = {
       SCANLAKE_BUCKET: bucket.asR2(),
       RATE_LIMITER: allowAllRateLimiter,
       FORMAT_URL: formatUrl,
+      ...extra,
     } as Env
-    return testApp().request(path, { method: 'POST', body: form }, env)
+    // The routes hand the FrontDesk notification to waitUntil, as in the Workers runtime
+    const ctx = {
+      waitUntil: (promise: Promise<unknown>) => void promise,
+      passThroughOnException: () => {},
+      props: {},
+    } as unknown as ExecutionContext
+    return testApp().request(path, { method: 'POST', body: form }, env, ctx)
   }
+
+  it('still tells FrontDesk about the batch when it carries positions', async () => {
+    const upload = vi.fn(async () => {})
+    const form = batchForm({
+      scans: scansParquet(),
+      compositions: compositionsParquet(),
+      positions: positionsParquet(),
+    })
+    form.set('isFinal', 'true')
+    const res = await post(form, FORMAT_V3_URL, { FRONTDESK: { upload } } as unknown as Partial<Env>)
+
+    expect(res.status).toBe(200)
+    expect(upload).toHaveBeenCalledWith({ sessionId: SESSION_ID, batchNumber: BATCH, isFinal: true })
+  })
 
   it('stores scans and compositions only, as before, when nothing optional is sent', async () => {
     const res = await post(batchForm({ scans: scansParquet(), compositions: compositionsParquet() }))
